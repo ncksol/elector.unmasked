@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elector rebuilt — live-scoring UK political quiz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f4eee0; --paper-warm:#e8ddc6; --ink:#1a2236; --ink-soft:#424b60;
+  --slate:#6a7183; --mist:#ddd5c2; --line:#cfc5ad; --line-strong:#a89d84;
+  --navy:#1e3a5f; --accent:#8a2a2a; --good:#3e7a3e; --bad:#a83232;
+  --shadow:0 2px 8px rgba(26,34,54,.08);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:"Public Sans",system-ui,sans-serif;background:var(--paper);color:var(--ink);line-height:1.5;min-height:100vh}
+h1,h2,h3{font-family:"Fraunces",serif;font-weight:500;font-variation-settings:"opsz" 48;margin:0;line-height:1.2}
+h1{font-size:clamp(1.8rem,5vw,2.4rem)}
+h2{font-size:clamp(1.3rem,4vw,1.7rem)}
+p{margin:8px 0}
+button{font:inherit;cursor:pointer}
+a{color:var(--ink)}
+
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:24px;max-width:1200px;margin:0 auto;padding:24px 20px;align-items:start}
+@media (max-width:880px){
+  .layout{grid-template-columns:1fr;gap:16px}
+}
+.main{min-width:0}
+.side{position:sticky;top:24px;background:var(--paper-warm);border:1px solid var(--line);border-radius:14px;padding:18px;max-height:calc(100vh - 48px);overflow-y:auto;box-shadow:var(--shadow)}
+@media (max-width:880px){
+  .side{position:static;max-height:none}
+}
+
+.nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:16px;flex-wrap:wrap}
+.brand{font-family:"Fraunces",serif;font-weight:500;text-decoration:none}
+.brand .mark{font-size:1.3rem}
+.brand .mark em{color:var(--accent);font-style:normal}
+.brand .tag{display:block;font-family:"Public Sans";font-size:.7rem;color:var(--slate);letter-spacing:.14em;text-transform:uppercase;margin-top:2px}
+
+.progress{display:flex;gap:4px;margin-bottom:24px;height:6px}
+.progress .seg{flex:1;background:var(--mist);border-radius:3px;overflow:hidden;position:relative;transition:flex .3s}
+.progress .seg.active{flex:6;background:#e0d7c3}
+.progress .seg .fill{height:100%;background:var(--accent);transition:width .3s}
+.progress .seg.done .fill{width:100% !important}
+
+.qcount{font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--slate);font-weight:600;margin-bottom:10px}
+.qcount .bname{color:var(--accent)}
+.qstatement{font-family:"Fraunces",serif;font-weight:500;font-size:clamp(1.2rem,3.6vw,1.55rem);line-height:1.3;margin-bottom:10px}
+.qcontext{background:var(--paper-warm);border:1px solid var(--line);border-left:3px solid var(--navy);padding:10px 14px;border-radius:10px;margin:10px 0 18px;font-size:.88rem;color:var(--ink-soft);line-height:1.5}
+.qcontext .lbl{display:block;font-size:.66rem;letter-spacing:.2em;text-transform:uppercase;color:var(--navy);font-weight:700;margin-bottom:4px}
+
+.likert{display:grid;gap:8px;margin-top:14px}
+.lk{text-align:left;background:var(--paper-warm);border:1px solid var(--line);padding:12px 16px;border-radius:12px;font-size:1rem;transition:border-color .15s, background .15s, transform .15s, box-shadow .15s;display:flex;align-items:center;gap:12px;width:100%;color:var(--ink)}
+@media (hover: hover) {
+  .lk:hover, .lk:focus-visible{border-color:var(--accent);background:#fff;outline:none;transform:translateY(-1px);box-shadow:var(--shadow)}
+}
+.lk:focus-visible{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px rgba(138,42,42,.18)}
+.lk.previewing{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px rgba(138,42,42,.18)}
+.lk .mk{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--line-strong);flex-shrink:0;display:grid;place-items:center;transition:all .15s}
+.lk.previewing .mk{border-color:var(--accent);background:var(--accent)}
+.lk.previewing .mk::after{content:"";width:6px;height:6px;border-radius:50%;background:var(--paper-warm)}
+.lk .lbl{flex:1}
+.lk .hint{font-size:.72rem;color:var(--accent);font-weight:600;letter-spacing:.05em}
+.lk[disabled]{opacity:.5;cursor:not-allowed}
+
+.qnav{display:flex;justify-content:space-between;margin-top:18px;gap:10px}
+.btn{display:inline-flex;align-items:center;gap:8px;background:var(--ink);color:var(--paper);border:none;padding:10px 18px;border-radius:99px;font:inherit;font-weight:500;font-size:.92rem;cursor:pointer;transition:transform .15s, background .15s;text-decoration:none}
+.btn:hover:not([disabled]){transform:translateY(-1px);background:#2a334e}
+.btn.ghost{background:none;color:var(--ink);border:1px solid var(--line-strong)}
+.btn.ghost:hover:not([disabled]){background:var(--paper-warm)}
+.btn[disabled]{opacity:.4;cursor:not-allowed}
+
+.sb-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;gap:8px;flex-wrap:wrap}
+.sb-title{font-family:"Fraunces",serif;font-weight:500;font-size:1.05rem}
+.sb-meta{font-size:.72rem;color:var(--slate);letter-spacing:.08em;text-transform:uppercase;font-weight:600}
+.sb-toggle{background:none;border:1px solid var(--line-strong);color:var(--ink-soft);font:inherit;font-size:.72rem;padding:4px 10px;border-radius:99px;cursor:pointer;transition:all .15s}
+.sb-toggle:hover{border-color:var(--accent);color:var(--ink);background:#fff}
+.sb-toggle.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+
+.legend{font-size:.72rem;color:var(--slate);margin-top:6px;padding:6px 8px;background:rgba(255,255,255,.4);border-radius:8px;border:1px solid var(--line);line-height:1.4}
+.legend.preview-on{background:rgba(138,42,42,.06);border-color:rgba(138,42,42,.25);color:var(--ink-soft)}
+
+.row{margin-top:8px;padding:6px 0}
+.row.hidden-party{opacity:.55}
+.row .meta{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;gap:6px}
+.row .pn{display:flex;align-items:center;gap:8px;font-size:.86rem;font-weight:500;min-width:0}
+.row .pn .pc{width:9px;height:9px;border-radius:50%;flex-shrink:0;display:inline-block}
+.row .pn .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .pv{font-variant-numeric:tabular-nums;font-size:.82rem;color:var(--ink);font-weight:600;display:flex;align-items:baseline;gap:6px}
+.row .pv .delta{font-size:.7rem;font-weight:600;letter-spacing:.02em;display:none}
+.row .pv .delta.up{color:var(--good)}
+.row .pv .delta.down{color:var(--bad)}
+.row.previewing .pv .delta{display:inline}
+.pbar{position:relative;height:9px;background:var(--mist);border-radius:99px;overflow:hidden}
+.pbar .pf{position:absolute;top:0;left:0;height:100%;border-radius:99px;transition:width .35s cubic-bezier(.2,.7,.2,1);z-index:2}
+.pbar .pg{position:absolute;top:0;left:0;height:100%;border-radius:99px;opacity:0;transition:width .15s ease, opacity .15s ease;z-index:1}
+.row.previewing .pbar .pg{opacity:.55}
+.row.previewing .pbar .pf{opacity:.75}
+
+.intro h1 em{font-style:italic;color:var(--accent)}
+.lede{font-size:1rem;color:var(--ink-soft);max-width:62ch;margin:8px 0 18px}
+.info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-top:18px}
+.info-card{background:var(--paper-warm);border:1px solid var(--line);border-radius:12px;padding:16px}
+.info-card .num{font-family:"Fraunces";font-size:1.6rem;color:var(--accent);font-weight:500}
+.info-card h3{margin:4px 0 6px;font-size:1rem}
+.info-card p{font-size:.86rem;color:var(--ink-soft);margin:0}
+
+.results-hero{text-align:center;margin:6px 0 18px}
+.rmatch{font-family:"Fraunces";font-size:2.6rem;font-weight:500;display:inline-block;padding:10px 28px;border-radius:18px;color:#fff;margin:8px 0}
+.results-actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+
+.blockintro{background:var(--paper-warm);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:14px;padding:18px 22px;margin-bottom:14px}
+.blockintro .meta{font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--slate);font-weight:600;margin-bottom:6px}
+.blockintro h2{margin-bottom:6px}
+.blockintro p{font-size:.95rem;color:var(--ink-soft);margin:6px 0}
+
+.footer{margin-top:60px;padding-top:18px;border-top:1px solid var(--line);font-size:.78rem;color:var(--slate);max-width:62ch}
+.footer a{color:var(--slate)}
+
+.preview-note{font-size:.74rem;color:var(--ink-soft);margin-top:14px;padding:8px 10px;background:rgba(255,255,255,.4);border-radius:8px;border:1px solid var(--line);line-height:1.45}
+.preview-note strong{color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+/* app.js — quiz logic, embedded in the final HTML by build-app.js.
+   The build script replaces {"parties":[{"id":"labour","name":"Labour","color":"#c8102e","hiddenByDefault":false},{"id":"cons","name":"Conservatives","color":"#0a5ca4","hiddenByDefault":false},{"id":"reform","name":"Reform UK","color":"#12b6cf","hiddenByDefault":false},{"id":"libdem","name":"Liberal Democrats","color":"#e2820f","hiddenByDefault":false},{"id":"green","name":"Greens","color":"#4a8a3a","hiddenByDefault":false},{"id":"snp","name":"SNP","color":"#fdd017","hiddenByDefault":false},{"id":"cymru","name":"Plaid Cymru","color":"#3f8468","hiddenByDefault":false},{"id":"advance","name":"Advance UK","color":"#5a6077","hiddenByDefault":true},{"id":"restore","name":"Restore Britain","color":"#7a5a3f","hiddenByDefault":true},{"id":"yourparty","name":"Your Party","color":"#8f4a70","hiddenByDefault":true},{"id":"workers","name":"Workers Party","color":"#a52b24","hiddenByDefault":true}],"likert":[{"v":-2,"label":"Strongly disagree"},{"v":-1,"label":"Disagree"},{"v":0,"label":"Neutral / unsure"},{"v":1,"label":"Agree"},{"v":2,"label":"Strongly agree"}],"fairness":{"libdem":1.015,"snp":1.015,"cymru":1.015},"blocks":[{"index":1,"name":"Broad strokes","intro":"Twelve broad statements about how you see people, society, and change. Go with your gut.","questionsShownPerSession":10,"questionsInPool":13,"questions":[{"id":"B1-Q1","text":"Reducing the gap between rich and poor should be a central goal of government rather than balance itself naturally.","context":"Inequality has been stagnant since 1990s with the richest 10% holding around 1/2 of wealth, however also paying more in taxes and driving competition.","stance":{"labour":2,"cons":-1,"reform":-1,"libdem":1,"green":2,"snp":1,"cymru":1,"advance":-2,"restore":-1,"yourparty":2,"workers":2}},{"id":"B1-Q2","text":"Government regulation of the economy should be kept to a minimum.","context":"Regulation can protect consumers and build trust but adds costs","stance":{"labour":-1,"cons":2,"reform":1,"libdem":0,"green":-1,"snp":-1,"cymru":-1,"advance":2,"restore":1,"yourparty":-2,"workers":-2}},{"id":"B1-Q3","text":"When tradition and social change conflict, tradition should generally prevail.","context":"Some UK reforms that once seemed disruptive later became durable, but some reforms last better when they are based on existing foundations.","stance":{"labour":-1,"cons":1,"reform":1,"libdem":-1,"green":-2,"snp":-1,"cymru":-1,"advance":0,"restore":1,"yourparty":-2,"workers":1}},{"id":"B1-Q4","text":"The overall role of government should be smaller than it is today.","context":"Public spending averages around 1/2 of GDP, up from historical ~35% avg; though it often peaks during crises.","stance":{"labour":-1,"cons":1,"reform":1,"libdem":-1,"green":-2,"snp":-1,"cymru":-1,"advance":2,"restore":1,"yourparty":-2,"workers":-2}},{"id":"B1-Q5","text":"People should be legally free to express political, religious, or social views that others may reject.","context":"UK law protects freedom of expression under Article 10 of the Human Rights Act, but that right is not absolute and can be limited to protect safety, order and others’ rights. The extent to which this should be done is debated.","stance":{"labour":0,"cons":1,"reform":1,"libdem":2,"green":-1,"snp":0,"cymru":0,"advance":1,"restore":1,"yourparty":-1,"workers":0}},{"id":"B1-Q6","text":"Decisive political leadership that challenges established norms is preferable to consensus-building.","context":"A government with a strong majority can usually pass laws more easily, but reforms tend to last longer when support extends beyond one party.","stance":{"labour":-1,"cons":0,"reform":1,"libdem":-1,"green":0,"snp":0,"cymru":0,"advance":1,"restore":2,"yourparty":1,"workers":1}},{"id":"B1-Q7","text":"Core British values should be upheld, even when they conflict with some cultural practices or worldviews, rather than adapted to fit them.","context":"Government guidance defines fundamental British values as democracy, the rule of law, individual liberty, and mutual respect and tolerance of different beliefs.","stance":{"labour":0,"cons":1,"reform":1,"libdem":-1,"green":-2,"snp":0,"cymru":0,"advance":0,"restore":1,"yourparty":-2,"workers":1}},{"id":"B1-Q8","text":"Britain is a worse place to live today than it was ten years ago.","context":"Different indicators point in different directions, many remain subjective.","stance":{"labour":-1,"cons":1,"reform":2,"libdem":0,"green":1,"snp":2,"cymru":2,"advance":1,"restore":2,"yourparty":1,"workers":2}},{"id":"B1-Q9","text":"Direct redistribution is more effective than economic growth at reducing inequality.","context":"ONS data show taxes and benefits reduce inequality directly, whereas the OECD links stronger competition and productivity growth to higher living standards.","stance":{"labour":2,"cons":-1,"reform":0,"libdem":1,"green":2,"snp":2,"cymru":1,"advance":-1,"restore":-1,"yourparty":2,"workers":2}},{"id":"B1-Q10","text":"Very large personal wealth should face higher taxation, even if this causes some wealthy individuals to shift their tax residency abroad.","context":"Taxing wealthy people can raise more revenue, but if taxes are too high, business closures or relocation can produce the opposite effect.","stance":{"labour":1,"cons":-1,"reform":-1,"libdem":0,"green":2,"snp":1,"cymru":1,"advance":0,"restore":-1,"yourparty":2,"workers":2}},{"id":"B1-Q11","text":"Essential services should remain mainly publicly owned in all circumstances.","context":"Public ownership ensures access; private can bring efficiency/innovation. Debates focus on costs, quality, and competition.","stance":{"labour":2,"cons":-1,"reform":0,"libdem":0,"green":2,"snp":1,"cymru":1,"advance":-2,"restore":-1,"yourparty":2,"workers":2}},{"id":"B1-Q12","text":"When rules are broken, strict enforcement matters more than trying to understand the circumstances.","context":"UK sentencing already balances both: courts follow offence guidelines, but must also consider aggravating and mitigating factors, intent, harm and guilty pleas.","stance":{"labour":0,"cons":1,"reform":1,"libdem":-2,"green":-1,"snp":-1,"cymru":-1,"advance":1,"restore":1,"yourparty":-1,"workers":0}},{"id":"B1-Q13","text":"Closing the remaining gap between men and women — in pay, representation, and safety — should still be a priority for government.","context":"ONS reported that the UK gender pay gap was around 7% for full-time workers in 2024, or 13% including part-time workers. Some argue this reflects discrimination, while others say it is partly driven by biological, social, and lifestyle differences.","stance":{"labour":2,"cons":0,"reform":-1,"libdem":2,"green":2,"snp":1,"cymru":1,"advance":-1,"restore":-1,"yourparty":2,"workers":1}}]},{"index":2,"name":"Wider themes","intro":"Twelve statements about general priorities — the kind of country, the direction of travel.","questionsShownPerSession":10,"questionsInPool":14,"questions":[{"id":"B2-Q1","text":"I would accept limits on what British governments can do in exchange for stronger international legal protection of individual rights.","context":null,"stance":{"labour":1,"cons":-1,"reform":-1,"libdem":2,"green":1,"snp":1,"cymru":1,"advance":0,"restore":-2,"yourparty":1,"workers":-1}},{"id":"B2-Q2","text":"Taxes on most people should be lower than they are today, even if that meant reduced public spending.","context":"UK total tax revenue is around 36% of GDP. The basic rate of income tax is 20%, higher rate 40%, additional rate 45%. National Insurance adds 8% for most employees. VAT is 20% on most goods.","stance":{"labour":-1,"cons":2,"reform":2,"libdem":0,"green":-2,"snp":0,"cymru":0,"advance":0,"restore":1,"yourparty":-2,"workers":-1}},{"id":"B2-Q3","text":"Given a fixed budget, more money should go to police and street-level enforcement than to social programmes.","context":null,"stance":{"labour":0,"cons":2,"reform":1,"libdem":0,"green":-2,"snp":-1,"cymru":-1,"advance":0,"restore":1,"yourparty":-2,"workers":0}},{"id":"B2-Q4","text":"I would pay more in tax if it meant noticeably better public services.","context":null,"stance":{"labour":2,"cons":-1,"reform":-2,"libdem":0,"green":2,"snp":1,"cymru":1,"advance":-2,"restore":-1,"yourparty":2,"workers":1}},{"id":"B2-Q5","text":"Investment in public transport should improve alongside roads, with some shift of priority toward buses, trains, and active travel.","context":null,"stance":{"labour":2,"cons":0,"reform":-1,"libdem":1,"green":2,"snp":1,"cymru":1,"advance":-1,"restore":0,"yourparty":1,"workers":0}},{"id":"B2-Q6","text":"Politics has not served most people well over the past decade.","context":null,"stance":{"labour":-1,"cons":-2,"reform":1,"libdem":0,"green":1,"snp":2,"cymru":2,"advance":0,"restore":2,"yourparty":1,"workers":2}},{"id":"B2-Q7","text":"Making it easier for employers to dismiss underperforming workers would harm more employees than it would help businesses.","context":null,"stance":{"labour":2,"cons":-1,"reform":0,"libdem":1,"green":2,"snp":1,"cymru":1,"advance":-1,"restore":0,"yourparty":2,"workers":2}},{"id":"B2-Q8","text":"The benefits system should prioritise preventing fraud and abuse, even if that means stricter checks and occasional delays for genuine claimants.","context":null,"stance":{"labour":-1,"cons":1,"reform":1,"libdem":0,"green":-2,"snp":-1,"cymru":-1,"advance":2,"restore":1,"yourparty":-2,"workers":-1}},{"id":"B2-Q9","text":"Councils, regions, and devolved nations should make more decisions without Westminster's approval.","context":null,"stance":{"labour":0,"cons":-1,"reform":-1,"libdem":2,"green":2,"snp":2,"cymru":2,"advance":0,"restore":-1,"yourparty":1,"workers":0}},{"id":"B2-Q10","text":"Looking after elderly relatives is primarily a family responsibility, not something the state should fund extensively.","context":null,"stance":{"labour":-1,"cons":1,"reform":1,"libdem":-1,"green":-1,"snp":-1,"cymru":-1,"advance":1,"restore":1,"yourparty":-2,"workers":-1}},{"id":"B2-Q11","text":"I would accept higher council tax in order to maintain or improve local services.","context":null,"stance":{"labour":2,"cons":-1,"reform":-1,"libdem":1,"green":2,"snp":0,"cymru":0,"advance":0,"restore":-1,"yourparty":1,"workers":1}},{"id":"B2-Q12","text":"A local candidate who actually lives in the area matters more to me than their party label.","context":null,"stance":{"labour":0,"cons":0,"reform":-1,"libdem":1,"green":0,"snp":2,"cymru":2,"advance":0,"restore":1,"yourparty":1,"workers":1}},{"id":"B2-Q13","text":"Strong workplace rights from day one — sick pay, unfair dismissal protection, parental leave — should apply to all workers, including those on short-term contracts.","context":"Labour's Employment Rights Bill (2024-25) made several protections apply from day one rather than after two years of employment; opponents argue this raises the cost of hiring and especially affects small employers.","stance":{"labour":2,"cons":-1,"reform":-1,"libdem":1,"green":2,"snp":2,"cymru":2,"advance":-2,"restore":-1,"yourparty":2,"workers":2}},{"id":"B2-Q14","text":"Strong trade unions are good for the economy because they give workers fair bargaining power with employers.","context":"Around 22% of UK employees are union members (higher in the public sector, lower in the private sector). Union density peaked above 50% in the late 1970s.","stance":{"labour":2,"cons":-1,"reform":-1,"libdem":0,"green":1,"snp":1,"cymru":1,"advance":-2,"restore":-1,"yourparty":2,"workers":2}}]},{"index":3,"name":"Policy direction","intro":"Twelve policy statements, several framed as trade-offs so the real preference isn't hidden behind a slogan. Three include purely factual context — raw figures only.","questionsShownPerSession":10,"questionsInPool":14,"questions":[{"id":"B3-Q1","text":"I would support halving net migration, even if it caused labour shortages in some sectors.","context":"ONS provisional estimate: net migration 204,000 for the year to June 2025 (649,000 the year before, peaked at 944,000 in early 2023). Long-term immigration ~898,000, around 75% non-EU (students, workers, dependants, asylum). Separately, the Home Office recorded around 43,000 detected illegal arrivals in the year to June 2024 (84% via small boats); many others enter legally then overstay. There is no authoritative figure for the total unauthorised resident population; the most cited estimate (Pew, 2017, revised) is 700,000–900,000 and is disputed in both directions. Around 21% of UK workers are foreign-born — higher in sectors such as healthcare (~19% of NHS staff are non-UK nationals; ~43% of doctors in England and Wales are foreign-born) and social care (~25%). OBR modelling suggests higher net migration raises GDP and reduces government borrowing over the medium term; effects on per-person GDP, wages, and public-service demand are more contested.","stance":{"labour":-1,"cons":0,"reform":1,"libdem":-1,"green":-2,"snp":-1,"cymru":-1,"advance":2,"restore":2,"yourparty":-2,"workers":1}},{"id":"B3-Q2","text":"I would support significant NHS reorganisation, including changing where some services are delivered, if it was likely to reduce waiting times overall.","context":"UK health spending is around £2,900 per person per year. NHS England treats around 1.6 million patients per day.","stance":{"labour":0,"cons":1,"reform":1,"libdem":0,"green":-1,"snp":-1,"cymru":-1,"advance":1,"restore":1,"yourparty":-1,"workers":-1}},{"id":"B3-Q3","text":"Britain should build at least 300,000 new homes a year, even if that means building in areas currently protected from development.","context":"England currently completes around 220,000 new homes a year. The 300,000 figure has been the long-stated government target.","stance":{"labour":2,"cons":1,"reform":1,"libdem":2,"green":-1,"snp":0,"cymru":0,"advance":2,"restore":-2,"yourparty":1,"workers":1}},{"id":"B3-Q4","text":"Unemployment benefits should stop for someone who turns down a suitable job offer.","context":null,"stance":{"labour":-1,"cons":1,"reform":2,"libdem":0,"green":-1,"snp":0,"cymru":0,"advance":2,"restore":2,"yourparty":-2,"workers":0}},{"id":"B3-Q5","text":"Railways and energy companies should be mainly publicly owned, accepting that both public and private models come with trade-offs in cost and service quality.","context":null,"stance":{"labour":2,"cons":-2,"reform":0,"libdem":0,"green":2,"snp":1,"cymru":1,"advance":-2,"restore":-1,"yourparty":2,"workers":2}},{"id":"B3-Q6","text":"Climate targets should be relaxed if meeting them would mean noticeably higher household energy bills or job losses in traditional industries.","context":null,"stance":{"labour":-1,"cons":-1,"reform":2,"libdem":-2,"green":-2,"snp":-1,"cymru":-1,"advance":0,"restore":2,"yourparty":-1,"workers":1}},{"id":"B3-Q7","text":"If independent providers could help the NHS reduce waiting times at equal or lower cost, the NHS should be able to use them in limited areas, provided it remains free at the point of use.","context":"NHS England treats around 1.6 million patients per day. UK health costs around £2,900 per year for a taxpayer.","stance":{"labour":0,"cons":2,"reform":2,"libdem":0,"green":-2,"snp":-1,"cymru":-1,"advance":1,"restore":0,"yourparty":-2,"workers":-2}},{"id":"B3-Q8","text":"Nuclear power plants should be built and run as a major part of Britain's electricity mix, despite the costs and waste involved.","context":null,"stance":{"labour":1,"cons":0,"reform":1,"libdem":1,"green":-2,"snp":0,"cymru":0,"advance":1,"restore":1,"yourparty":-1,"workers":1}},{"id":"B3-Q9","text":"I would support defence spending rising to 2.5% of GDP or higher, even if it meant cuts to other areas.","context":null,"stance":{"labour":1,"cons":2,"reform":2,"libdem":1,"green":-1,"snp":0,"cymru":0,"advance":1,"restore":1,"yourparty":-2,"workers":-2}},{"id":"B3-Q10","text":"The UK should reduce overseas aid spending and redirect it to domestic public services.","context":null,"stance":{"labour":-2,"cons":0,"reform":2,"libdem":-1,"green":-2,"snp":-1,"cymru":-1,"advance":1,"restore":2,"yourparty":-2,"workers":1}},{"id":"B3-Q11","text":"A substantial tax on very large personal wealth should be introduced, even if some wealthy individuals left the country as a result.","context":null,"stance":{"labour":1,"cons":-1,"reform":-2,"libdem":1,"green":2,"snp":1,"cymru":1,"advance":-1,"restore":-1,"yourparty":2,"workers":2}},{"id":"B3-Q12","text":"I would accept a short-term hit to the economy and household costs in exchange for faster action on climate change.","context":null,"stance":{"labour":2,"cons":-1,"reform":-2,"libdem":1,"green":2,"snp":1,"cymru":1,"advance":-1,"restore":-1,"yourparty":1,"workers":-1}},{"id":"B3-Q13","text":"Scotland and Wales should be able to choose their own constitutional future — including independence — if their people clearly want it.","context":"The 2014 Scottish independence referendum returned 55% No, 45% Yes. Welsh independence polling has grown from low-single-digits historically to around 20-30% support in recent surveys.","stance":{"labour":-1,"cons":-2,"reform":-2,"libdem":1,"green":2,"snp":2,"cymru":2,"advance":-1,"restore":-2,"yourparty":1,"workers":0}},{"id":"B3-Q14","text":"The working-age welfare bill has grown too large and should be reduced, even if some claimants are worse off as a result.","context":"DWP spending on working-age benefits is around £90bn per year. Health-related benefits (PIP, incapacity) have grown since 2019. Some argue this reflects an affordability problem; others say it reflects genuine rises in illness, disability, and the cost of living.","stance":{"labour":-2,"cons":2,"reform":2,"libdem":-1,"green":-2,"snp":-2,"cymru":-2,"advance":2,"restore":2,"yourparty":-2,"workers":-2}}]},{"index":4,"name":"Specific positions","intro":"Twelve concrete positions framed so the trade-off is visible — not just the slogan.","questionsShownPerSession":10,"questionsInPool":14,"questions":[{"id":"B4-Q1","text":"British courts should have the final say on immigration and security matters, without being overruled by international human-rights courts.","context":null,"stance":{"labour":-1,"cons":1,"reform":2,"libdem":-2,"green":-2,"snp":-2,"cymru":-1,"advance":2,"restore":2,"yourparty":-2,"workers":1}},{"id":"B4-Q2","text":"Stopping unauthorised entry into the UK is more important than ensuring everyone can argue their case, regardless of how they arrived.","context":null,"stance":{"labour":-1,"cons":2,"reform":1,"libdem":-1,"green":-2,"snp":-1,"cymru":-1,"advance":1,"restore":2,"yourparty":-2,"workers":0}},{"id":"B4-Q3","text":"Britain should adopt a written constitution to set out what governments can and cannot do.","context":null,"stance":{"labour":0,"cons":-1,"reform":-1,"libdem":2,"green":1,"snp":0,"cymru":0,"advance":-1,"restore":-1,"yourparty":1,"workers":1}},{"id":"B4-Q4","text":"Seats in Parliament should reflect the national vote share — even if that produces more coalition governments and slower decision-making.","context":null,"stance":{"labour":-1,"cons":-1,"reform":1,"libdem":2,"green":2,"snp":1,"cymru":1,"advance":0,"restore":0,"yourparty":1,"workers":2}},{"id":"B4-Q5","text":"The monarchy should be maintained for its continuity and tradition, despite being unelected.","context":null,"stance":{"labour":0,"cons":2,"reform":1,"libdem":0,"green":-1,"snp":-1,"cymru":0,"advance":0,"restore":2,"yourparty":-1,"workers":-1}},{"id":"B4-Q6","text":"Scotland and Wales should make significantly more of their own decisions, even if this creates bigger gaps between different parts of the UK.","context":null,"stance":{"labour":0,"cons":-1,"reform":-2,"libdem":2,"green":1,"snp":2,"cymru":2,"advance":0,"restore":-1,"yourparty":1,"workers":0}},{"id":"B4-Q7","text":"I would accept a national digital ID for adults if it reduced fraud and made services easier to access, even though it would increase the amount of identity data held by the state.","context":null,"stance":{"labour":2,"cons":0,"reform":-2,"libdem":0,"green":-1,"snp":0,"cymru":0,"advance":-2,"restore":-2,"yourparty":-1,"workers":-2}},{"id":"B4-Q8","text":"The mandatory BBC licence fee should be replaced with an optional subscription or advertising instead.","context":null,"stance":{"labour":-1,"cons":0,"reform":2,"libdem":-1,"green":-1,"snp":0,"cymru":0,"advance":1,"restore":2,"yourparty":-1,"workers":-1}},{"id":"B4-Q9","text":"Loosening employment and safety regulations for small businesses would create more jobs than it would cost in worker protections.","context":null,"stance":{"labour":-1,"cons":2,"reform":1,"libdem":1,"green":-2,"snp":0,"cymru":0,"advance":1,"restore":1,"yourparty":-1,"workers":-1}},{"id":"B4-Q10","text":"The state pension — including the triple lock — should be protected, even if that means less money for other public spending.","context":null,"stance":{"labour":2,"cons":1,"reform":2,"libdem":2,"green":0,"snp":1,"cymru":1,"advance":-1,"restore":1,"yourparty":1,"workers":2}},{"id":"B4-Q11","text":"The quickest way to get more homes built is to loosen planning rules so developers can build more freely.","context":null,"stance":{"labour":2,"cons":1,"reform":1,"libdem":0,"green":0,"snp":0,"cymru":0,"advance":0,"restore":-1,"yourparty":2,"workers":0}},{"id":"B4-Q12","text":"The quickest way to get more homes built is a large state-led council housing programme.","context":null,"stance":{"labour":2,"cons":-1,"reform":0,"libdem":1,"green":2,"snp":1,"cymru":1,"advance":-1,"restore":-1,"yourparty":2,"workers":2}},{"id":"B4-Q13","text":"Terminally ill adults with full mental capacity should be allowed to end their lives with medical assistance, under strict safeguards.","context":"The Terminally Ill Adults (End of Life) Bill was debated and rejected in Parliament in 2026 on a free vote. Public polling shows majority support for some form of assisted dying; opponents raise concerns about coercion of vulnerable patients and the adequacy of medical safeguards.","stance":{"labour":1,"cons":0,"reform":0,"libdem":2,"green":1,"snp":1,"cymru":1,"advance":0,"restore":-1,"yourparty":1,"workers":-1}},{"id":"B4-Q14","text":"The NHS should be the government's top funding priority, even if that means holding back on tax cuts or other spending plans.","context":"NHS spending is around 40% of day-to-day public service expenditure in England. Some argue the service needs more funding to meet rising demand; others say it needs structural reform before more money would be effective, or that other priorities (defence, education, tax relief) matter more.","stance":{"labour":2,"cons":0,"reform":-1,"libdem":2,"green":2,"snp":2,"cymru":2,"advance":-1,"restore":-1,"yourparty":2,"workers":2}}]},{"index":5,"name":"Fine grain","intro":"Twelve narrow specifics, mostly framed as trade-offs. Small shifts here distinguish similar parties.","questionsShownPerSession":10,"questionsInPool":14,"questions":[{"id":"B5-Q1","text":"Reducing reoffending through rehabilitation matters more than strict punishment.","context":null,"stance":{"labour":2,"cons":-1,"reform":-2,"libdem":2,"green":1,"snp":1,"cymru":1,"advance":0,"restore":-2,"yourparty":2,"workers":1}},{"id":"B5-Q2","text":"All voters should be required to show photo ID at polling stations, even if some legitimate voters are occasionally turned away.","context":null,"stance":{"labour":-1,"cons":2,"reform":2,"libdem":-1,"green":-2,"snp":-1,"cymru":-1,"advance":2,"restore":2,"yourparty":-2,"workers":-1}},{"id":"B5-Q3","text":"Children under 14 should not have access to smartphones with social media.","context":null,"stance":{"labour":1,"cons":1,"reform":0,"libdem":0,"green":1,"snp":0,"cymru":0,"advance":-1,"restore":1,"yourparty":0,"workers":1}},{"id":"B5-Q4","text":"British defence companies should stop selling weapons to other states, even when it means losing trade and jobs.","context":null,"stance":{"labour":0,"cons":-1,"reform":-1,"libdem":1,"green":2,"snp":1,"cymru":1,"advance":-1,"restore":-1,"yourparty":2,"workers":2}},{"id":"B5-Q5","text":"I would accept EU rules on parts of UK business and regulation in exchange for easier trade and travel with the EU.","context":null,"stance":{"labour":2,"cons":-1,"reform":-2,"libdem":2,"green":2,"snp":1,"cymru":1,"advance":-2,"restore":-2,"yourparty":1,"workers":-1}},{"id":"B5-Q6","text":"Strikes that disrupt transport, schools, or hospitals are sometimes justified, even when they cause real inconvenience to the public.","context":null,"stance":{"labour":1,"cons":-1,"reform":-1,"libdem":0,"green":1,"snp":1,"cymru":1,"advance":-2,"restore":-1,"yourparty":2,"workers":2}},{"id":"B5-Q7","text":"The House of Lords should be replaced with an elected second chamber, even if that means losing some expertise currently in the chamber.","context":null,"stance":{"labour":2,"cons":-1,"reform":1,"libdem":2,"green":1,"snp":1,"cymru":1,"advance":0,"restore":-1,"yourparty":1,"workers":1}},{"id":"B5-Q8","text":"Lower corporate taxes would attract enough investment and create enough jobs to outweigh the loss of tax revenue.","context":null,"stance":{"labour":-2,"cons":1,"reform":2,"libdem":0,"green":-2,"snp":0,"cymru":0,"advance":1,"restore":1,"yourparty":-2,"workers":-2}},{"id":"B5-Q9","text":"Climate change and economic inequality deserve more political attention than issues such as immigration, crime, or national sovereignty.","context":null,"stance":{"labour":1,"cons":-1,"reform":-2,"libdem":0,"green":2,"snp":0,"cymru":0,"advance":-1,"restore":-2,"yourparty":2,"workers":0}},{"id":"B5-Q10","text":"Policies that inconvenience and slow-down drivers (low-traffic neighbourhoods, speed limits) in order to cut pollution or improve pedestrian safety cause more harm than benefit.","context":null,"stance":{"labour":-1,"cons":1,"reform":2,"libdem":0,"green":-2,"snp":0,"cymru":0,"advance":1,"restore":1,"yourparty":0,"workers":-1}},{"id":"B5-Q11","text":"New developments should be refused if they don't fit the existing character of the area, even when housing is in short supply.","context":null,"stance":{"labour":-2,"cons":-1,"reform":0,"libdem":-1,"green":0,"snp":0,"cymru":0,"advance":-1,"restore":1,"yourparty":0,"workers":0}},{"id":"B5-Q12","text":"Britain should be noticeably more internationally active in ten years' time — more alliances, more engagement, more commitments abroad.","context":null,"stance":{"labour":2,"cons":0,"reform":-2,"libdem":2,"green":1,"snp":1,"cymru":1,"advance":0,"restore":-1,"yourparty":0,"workers":-2}},{"id":"B5-Q13","text":"Government should actively help first-time buyers onto the housing ladder — through tax incentives, subsidised mortgages, or extending right-to-buy — rather than focusing on social renting.","context":"Homeownership among under-35s is around half its 1990s level. Right-to-buy has sold over two million council homes since 1980; critics say it reduces social housing stock, supporters say it spreads property ownership.","stance":{"labour":-1,"cons":2,"reform":1,"libdem":0,"green":-1,"snp":-1,"cymru":-1,"advance":1,"restore":1,"yourparty":-2,"workers":-1}},{"id":"B5-Q14","text":"The right to protest in public spaces should be protected, even when protests cause disruption or inconvenience to others.","context":"The Public Order Act 2023 introduced new offences relating to protest-related disruption. Supporters say the law protects the public and essential services; critics argue it restricts a basic civil liberty.","stance":{"labour":1,"cons":-2,"reform":-2,"libdem":2,"green":2,"snp":1,"cymru":1,"advance":-2,"restore":-2,"yourparty":2,"workers":2}}]}]} with the JSON payload. */
+
+const DATA = {"parties":[{"id":"labour","name":"Labour","color":"#c8102e","hiddenByDefault":false},{"id":"cons","name":"Conservatives","color":"#0a5ca4","hiddenByDefault":false},{"id":"reform","name":"Reform UK","color":"#12b6cf","hiddenByDefault":false},{"id":"libdem","name":"Liberal Democrats","color":"#e2820f","hiddenByDefault":false},{"id":"green","name":"Greens","color":"#4a8a3a","hiddenByDefault":false},{"id":"snp","name":"SNP","color":"#fdd017","hiddenByDefault":false},{"id":"cymru","name":"Plaid Cymru","color":"#3f8468","hiddenByDefault":false},{"id":"advance","name":"Advance UK","color":"#5a6077","hiddenByDefault":true},{"id":"restore","name":"Restore Britain","color":"#7a5a3f","hiddenByDefault":true},{"id":"yourparty","name":"Your Party","color":"#8f4a70","hiddenByDefault":true},{"id":"workers","name":"Workers Party","color":"#a52b24","hiddenByDefault":true}],"likert":[{"v":-2,"label":"Strongly disagree"},{"v":-1,"label":"Disagree"},{"v":0,"label":"Neutral / unsure"},{"v":1,"label":"Agree"},{"v":2,"label":"Strongly agree"}],"fairness":{"libdem":1.015,"snp":1.015,"cymru":1.015},"blocks":[{"index":1,"name":"Broad strokes","intro":"Twelve broad statements about how you see people, society, and change. Go with your gut.","questionsShownPerSession":10,"questionsInPool":13,"questions":[{"id":"B1-Q1","text":"Reducing the gap between rich and poor should be a central goal of government rather than balance itself naturally.","context":"Inequality has been stagnant since 1990s with the richest 10% holding around 1/2 of wealth, however also paying more in taxes and driving competition.","stance":{"labour":2,"cons":-1,"reform":-1,"libdem":1,"green":2,"snp":1,"cymru":1,"advance":-2,"restore":-1,"yourparty":2,"workers":2}},{"id":"B1-Q2","text":"Government regulation of the economy should be kept to a minimum.","context":"Regulation can protect consumers and build trust but adds costs","stance":{"labour":-1,"cons":2,"reform":1,"libdem":0,"green":-1,"snp":-1,"cymru":-1,"advance":2,"restore":1,"yourparty":-2,"workers":-2}},{"id":"B1-Q3","text":"When tradition and social change conflict, tradition should generally prevail.","context":"Some UK reforms that once seemed disruptive later became durable, but some reforms last better when they are based on existing foundations.","stance":{"labour":-1,"cons":1,"reform":1,"libdem":-1,"green":-2,"snp":-1,"cymru":-1,"advance":0,"restore":1,"yourparty":-2,"workers":1}},{"id":"B1-Q4","text":"The overall role of government should be smaller than it is today.","context":"Public spending averages around 1/2 of GDP, up from historical ~35% avg; though it often peaks during crises.","stance":{"labour":-1,"cons":1,"reform":1,"libdem":-1,"green":-2,"snp":-1,"cymru":-1,"advance":2,"restore":1,"yourparty":-2,"workers":-2}},{"id":"B1-Q5","text":"People should be legally free to express political, religious, or social views that others may reject.","context":"UK law protects freedom of expression under Article 10 of the Human Rights Act, but that right is not absolute and can be limited to protect safety, order and others’ rights. The extent to which this should be done is debated.","stance":{"labour":0,"cons":1,"reform":1,"libdem":2,"green":-1,"snp":0,"cymru":0,"advance":1,"restore":1,"yourparty":-1,"workers":0}},{"id":"B1-Q6","text":"Decisive political leadership that challenges established norms is preferable to consensus-building.","context":"A government with a strong majority can usually pass laws more easily, but reforms tend to last longer when support extends beyond one party.","stance":{"labour":-1,"cons":0,"reform":1,"libdem":-1,"green":0,"snp":0,"cymru":0,"advance":1,"restore":2,"yourparty":1,"workers":1}},{"id":"B1-Q7","text":"Core British values should be upheld, even when they conflict with some cultural practices or worldviews, rather than adapted to fit them.","context":"Government guidance defines fundamental British values as democracy, the rule of law, individual liberty, and mutual respect and tolerance of different beliefs.","stance":{"labour":0,"cons":1,"reform":1,"libdem":-1,"green":-2,"snp":0,"cymru":0,"advance":0,"restore":1,"yourparty":-2,"workers":1}},{"id":"B1-Q8","text":"Britain is a worse place to live today than it was ten years ago.","context":"Different indicators point in different directions, many remain subjective.","stance":{"labour":-1,"cons":1,"reform":2,"libdem":0,"green":1,"snp":2,"cymru":2,"advance":1,"restore":2,"yourparty":1,"workers":2}},{"id":"B1-Q9","text":"Direct redistribution is more effective than economic growth at reducing inequality.","context":"ONS data show taxes and benefits reduce inequality directly, whereas the OECD links stronger competition and productivity growth to higher living standards.","stance":{"labour":2,"cons":-1,"reform":0,"libdem":1,"green":2,"snp":2,"cymru":1,"advance":-1,"restore":-1,"yourparty":2,"workers":2}},{"id":"B1-Q10","text":"Very large personal wealth should face higher taxation, even if this causes some wealthy individuals to shift their tax residency abroad.","context":"Taxing wealthy people can raise more revenue, but if taxes are too high, business closures or relocation can produce the opposite effect.","stance":{"labour":1,"cons":-1,"reform":-1,"libdem":0,"green":2,"snp":1,"cymru":1,"advance":0,"restore":-1,"yourparty":2,"workers":2}},{"id":"B1-Q11","text":"Essential services should remain mainly publicly owned in all circumstances.","context":"Public ownership ensures access; private can bring efficiency/innovation. Debates focus on costs, quality, and competition.","stance":{"labour":2,"cons":-1,"reform":0,"libdem":0,"green":2,"snp":1,"cymru":1,"advance":-2,"restore":-1,"yourparty":2,"workers":2}},{"id":"B1-Q12","text":"When rules are broken, strict enforcement matters more than trying to understand the circumstances.","context":"UK sentencing already balances both: courts follow offence guidelines, but must also consider aggravating and mitigating factors, intent, harm and guilty pleas.","stance":{"labour":0,"cons":1,"reform":1,"libdem":-2,"green":-1,"snp":-1,"cymru":-1,"advance":1,"restore":1,"yourparty":-1,"workers":0}},{"id":"B1-Q13","text":"Closing the remaining gap between men and women — in pay, representation, and safety — should still be a priority for government.","context":"ONS reported that the UK gender pay gap was around 7% for full-time workers in 2024, or 13% including part-time workers. Some argue this reflects discrimination, while others say it is partly driven by biological, social, and lifestyle differences.","stance":{"labour":2,"cons":0,"reform":-1,"libdem":2,"green":2,"snp":1,"cymru":1,"advance":-1,"restore":-1,"yourparty":2,"workers":1}}]},{"index":2,"name":"Wider themes","intro":"Twelve statements about general priorities — the kind of country, the direction of travel.","questionsShownPerSession":10,"questionsInPool":14,"questions":[{"id":"B2-Q1","text":"I would accept limits on what British governments can do in exchange for stronger international legal protection of individual rights.","context":null,"stance":{"labour":1,"cons":-1,"reform":-1,"libdem":2,"green":1,"snp":1,"cymru":1,"advance":0,"restore":-2,"yourparty":1,"workers":-1}},{"id":"B2-Q2","text":"Taxes on most people should be lower than they are today, even if that meant reduced public spending.","context":"UK total tax revenue is around 36% of GDP. The basic rate of income tax is 20%, higher rate 40%, additional rate 45%. National Insurance adds 8% for most employees. VAT is 20% on most goods.","stance":{"labour":-1,"cons":2,"reform":2,"libdem":0,"green":-2,"snp":0,"cymru":0,"advance":0,"restore":1,"yourparty":-2,"workers":-1}},{"id":"B2-Q3","text":"Given a fixed budget, more money should go to police and street-level enforcement than to social programmes.","context":null,"stance":{"labour":0,"cons":2,"reform":1,"libdem":0,"green":-2,"snp":-1,"cymru":-1,"advance":0,"restore":1,"yourparty":-2,"workers":0}},{"id":"B2-Q4","text":"I would pay more in tax if it meant noticeably better public services.","context":null,"stance":{"labour":2,"cons":-1,"reform":-2,"libdem":0,"green":2,"snp":1,"cymru":1,"advance":-2,"restore":-1,"yourparty":2,"workers":1}},{"id":"B2-Q5","text":"Investment in public transport should improve alongside roads, with some shift of priority toward buses, trains, and active travel.","context":null,"stance":{"labour":2,"cons":0,"reform":-1,"libdem":1,"green":2,"snp":1,"cymru":1,"advance":-1,"restore":0,"yourparty":1,"workers":0}},{"id":"B2-Q6","text":"Politics has not served most people well over the past decade.","context":null,"stance":{"labour":-1,"cons":-2,"reform":1,"libdem":0,"green":1,"snp":2,"cymru":2,"advance":0,"restore":2,"yourparty":1,"workers":2}},{"id":"B2-Q7","text":"Making it easier for employers to dismiss underperforming workers would harm more employees than it would help businesses.","context":null,"stance":{"labour":2,"cons":-1,"reform":0,"libdem":1,"green":2,"snp":1,"cymru":1,"advance":-1,"restore":0,"yourparty":2,"workers":2}},{"id":"B2-Q8","text":"The benefits system should prioritise preventing fraud and abuse, even if that means stricter checks and occasional delays for genuine claimants.","context":null,"stance":{"labour":-1,"cons":1,"reform":1,"libdem":0,"green":-2,"snp":-1,"cymru":-1,"advance":2,"restore":1,"yourparty":-2,"workers":-1}},{"id":"B2-Q9","text":"Councils, regions, and devolved nations should make more decisions without Westminster's approval.","context":null,"stance":{"labour":0,"cons":-1,"reform":-1,"libdem":2,"green":2,"snp":2,"cymru":2,"advance":0,"restore":-1,"yourparty":1,"workers":0}},{"id":"B2-Q10","text":"Looking after elderly relatives is primarily a family responsibility, not something the state should fund extensively.","context":null,"stance":{"labour":-1,"cons":1,"reform":1,"libdem":-1,"green":-1,"snp":-1,"cymru":-1,"advance":1,"restore":1,"yourparty":-2,"workers":-1}},{"id":"B2-Q11","text":"I would accept higher council tax in order to maintain or improve local services.","context":null,"stance":{"labour":2,"cons":-1,"reform":-1,"libdem":1,"green":2,"snp":0,"cymru":0,"advance":0,"restore":-1,"yourparty":1,"workers":1}},{"id":"B2-Q12","text":"A local candidate who actually lives in the area matters more to me than their party label.","context":null,"stance":{"labour":0,"cons":0,"reform":-1,"libdem":1,"green":0,"snp":2,"cymru":2,"advance":0,"restore":1,"yourparty":1,"workers":1}},{"id":"B2-Q13","text":"Strong workplace rights from day one — sick pay, unfair dismissal protection, parental leave — should apply to all workers, including those on short-term contracts.","context":"Labour's Employment Rights Bill (2024-25) made several protections apply from day one rather than after two years of employment; opponents argue this raises the cost of hiring and especially affects small employers.","stance":{"labour":2,"cons":-1,"reform":-1,"libdem":1,"green":2,"snp":2,"cymru":2,"advance":-2,"restore":-1,"yourparty":2,"workers":2}},{"id":"B2-Q14","text":"Strong trade unions are good for the economy because they give workers fair bargaining power with employers.","context":"Around 22% of UK employees are union members (higher in the public sector, lower in the private sector). Union density peaked above 50% in the late 1970s.","stance":{"labour":2,"cons":-1,"reform":-1,"libdem":0,"green":1,"snp":1,"cymru":1,"advance":-2,"restore":-1,"yourparty":2,"workers":2}}]},{"index":3,"name":"Policy direction","intro":"Twelve policy statements, several framed as trade-offs so the real preference isn't hidden behind a slogan. Three include purely factual context — raw figures only.","questionsShownPerSession":10,"questionsInPool":14,"questions":[{"id":"B3-Q1","text":"I would support halving net migration, even if it caused labour shortages in some sectors.","context":"ONS provisional estimate: net migration 204,000 for the year to June 2025 (649,000 the year before, peaked at 944,000 in early 2023). Long-term immigration ~898,000, around 75% non-EU (students, workers, dependants, asylum). Separately, the Home Office recorded around 43,000 detected illegal arrivals in the year to June 2024 (84% via small boats); many others enter legally then overstay. There is no authoritative figure for the total unauthorised resident population; the most cited estimate (Pew, 2017, revised) is 700,000–900,000 and is disputed in both directions. Around 21% of UK workers are foreign-born — higher in sectors such as healthcare (~19% of NHS staff are non-UK nationals; ~43% of doctors in England and Wales are foreign-born) and social care (~25%). OBR modelling suggests higher net migration raises GDP and reduces government borrowing over the medium term; effects on per-person GDP, wages, and public-service demand are more contested.","stance":{"labour":-1,"cons":0,"reform":1,"libdem":-1,"green":-2,"snp":-1,"cymru":-1,"advance":2,"restore":2,"yourparty":-2,"workers":1}},{"id":"B3-Q2","text":"I would support significant NHS reorganisation, including changing where some services are delivered, if it was likely to reduce waiting times overall.","context":"UK health spending is around £2,900 per person per year. NHS England treats around 1.6 million patients per day.","stance":{"labour":0,"cons":1,"reform":1,"libdem":0,"green":-1,"snp":-1,"cymru":-1,"advance":1,"restore":1,"yourparty":-1,"workers":-1}},{"id":"B3-Q3","text":"Britain should build at least 300,000 new homes a year, even if that means building in areas currently protected from development.","context":"England currently completes around 220,000 new homes a year. The 300,000 figure has been the long-stated government target.","stance":{"labour":2,"cons":1,"reform":1,"libdem":2,"green":-1,"snp":0,"cymru":0,"advance":2,"restore":-2,"yourparty":1,"workers":1}},{"id":"B3-Q4","text":"Unemployment benefits should stop for someone who turns down a suitable job offer.","context":null,"stance":{"labour":-1,"cons":1,"reform":2,"libdem":0,"green":-1,"snp":0,"cymru":0,"advance":2,"restore":2,"yourparty":-2,"workers":0}},{"id":"B3-Q5","text":"Railways and energy companies should be mainly publicly owned, accepting that both public and private models come with trade-offs in cost and service quality.","context":null,"stance":{"labour":2,"cons":-2,"reform":0,"libdem":0,"green":2,"snp":1,"cymru":1,"advance":-2,"restore":-1,"yourparty":2,"workers":2}},{"id":"B3-Q6","text":"Climate targets should be relaxed if meeting them would mean noticeably higher household energy bills or job losses in traditional industries.","context":null,"stance":{"labour":-1,"cons":-1,"reform":2,"libdem":-2,"green":-2,"snp":-1,"cymru":-1,"advance":0,"restore":2,"yourparty":-1,"workers":1}},{"id":"B3-Q7","text":"If independent providers could help the NHS reduce waiting times at equal or lower cost, the NHS should be able to use them in limited areas, provided it remains free at the point of use.","context":"NHS England treats around 1.6 million patients per day. UK health costs around £2,900 per year for a taxpayer.","stance":{"labour":0,"cons":2,"reform":2,"libdem":0,"green":-2,"snp":-1,"cymru":-1,"advance":1,"restore":0,"yourparty":-2,"workers":-2}},{"id":"B3-Q8","text":"Nuclear power plants should be built and run as a major part of Britain's electricity mix, despite the costs and waste involved.","context":null,"stance":{"labour":1,"cons":0,"reform":1,"libdem":1,"green":-2,"snp":0,"cymru":0,"advance":1,"restore":1,"yourparty":-1,"workers":1}},{"id":"B3-Q9","text":"I would support defence spending rising to 2.5% of GDP or higher, even if it meant cuts to other areas.","context":null,"stance":{"labour":1,"cons":2,"reform":2,"libdem":1,"green":-1,"snp":0,"cymru":0,"advance":1,"restore":1,"yourparty":-2,"workers":-2}},{"id":"B3-Q10","text":"The UK should reduce overseas aid spending and redirect it to domestic public services.","context":null,"stance":{"labour":-2,"cons":0,"reform":2,"libdem":-1,"green":-2,"snp":-1,"cymru":-1,"advance":1,"restore":2,"yourparty":-2,"workers":1}},{"id":"B3-Q11","text":"A substantial tax on very large personal wealth should be introduced, even if some wealthy individuals left the country as a result.","context":null,"stance":{"labour":1,"cons":-1,"reform":-2,"libdem":1,"green":2,"snp":1,"cymru":1,"advance":-1,"restore":-1,"yourparty":2,"workers":2}},{"id":"B3-Q12","text":"I would accept a short-term hit to the economy and household costs in exchange for faster action on climate change.","context":null,"stance":{"labour":2,"cons":-1,"reform":-2,"libdem":1,"green":2,"snp":1,"cymru":1,"advance":-1,"restore":-1,"yourparty":1,"workers":-1}},{"id":"B3-Q13","text":"Scotland and Wales should be able to choose their own constitutional future — including independence — if their people clearly want it.","context":"The 2014 Scottish independence referendum returned 55% No, 45% Yes. Welsh independence polling has grown from low-single-digits historically to around 20-30% support in recent surveys.","stance":{"labour":-1,"cons":-2,"reform":-2,"libdem":1,"green":2,"snp":2,"cymru":2,"advance":-1,"restore":-2,"yourparty":1,"workers":0}},{"id":"B3-Q14","text":"The working-age welfare bill has grown too large and should be reduced, even if some claimants are worse off as a result.","context":"DWP spending on working-age benefits is around £90bn per year. Health-related benefits (PIP, incapacity) have grown since 2019. Some argue this reflects an affordability problem; others say it reflects genuine rises in illness, disability, and the cost of living.","stance":{"labour":-2,"cons":2,"reform":2,"libdem":-1,"green":-2,"snp":-2,"cymru":-2,"advance":2,"restore":2,"yourparty":-2,"workers":-2}}]},{"index":4,"name":"Specific positions","intro":"Twelve concrete positions framed so the trade-off is visible — not just the slogan.","questionsShownPerSession":10,"questionsInPool":14,"questions":[{"id":"B4-Q1","text":"British courts should have the final say on immigration and security matters, without being overruled by international human-rights courts.","context":null,"stance":{"labour":-1,"cons":1,"reform":2,"libdem":-2,"green":-2,"snp":-2,"cymru":-1,"advance":2,"restore":2,"yourparty":-2,"workers":1}},{"id":"B4-Q2","text":"Stopping unauthorised entry into the UK is more important than ensuring everyone can argue their case, regardless of how they arrived.","context":null,"stance":{"labour":-1,"cons":2,"reform":1,"libdem":-1,"green":-2,"snp":-1,"cymru":-1,"advance":1,"restore":2,"yourparty":-2,"workers":0}},{"id":"B4-Q3","text":"Britain should adopt a written constitution to set out what governments can and cannot do.","context":null,"stance":{"labour":0,"cons":-1,"reform":-1,"libdem":2,"green":1,"snp":0,"cymru":0,"advance":-1,"restore":-1,"yourparty":1,"workers":1}},{"id":"B4-Q4","text":"Seats in Parliament should reflect the national vote share — even if that produces more coalition governments and slower decision-making.","context":null,"stance":{"labour":-1,"cons":-1,"reform":1,"libdem":2,"green":2,"snp":1,"cymru":1,"advance":0,"restore":0,"yourparty":1,"workers":2}},{"id":"B4-Q5","text":"The monarchy should be maintained for its continuity and tradition, despite being unelected.","context":null,"stance":{"labour":0,"cons":2,"reform":1,"libdem":0,"green":-1,"snp":-1,"cymru":0,"advance":0,"restore":2,"yourparty":-1,"workers":-1}},{"id":"B4-Q6","text":"Scotland and Wales should make significantly more of their own decisions, even if this creates bigger gaps between different parts of the UK.","context":null,"stance":{"labour":0,"cons":-1,"reform":-2,"libdem":2,"green":1,"snp":2,"cymru":2,"advance":0,"restore":-1,"yourparty":1,"workers":0}},{"id":"B4-Q7","text":"I would accept a national digital ID for adults if it reduced fraud and made services easier to access, even though it would increase the amount of identity data held by the state.","context":null,"stance":{"labour":2,"cons":0,"reform":-2,"libdem":0,"green":-1,"snp":0,"cymru":0,"advance":-2,"restore":-2,"yourparty":-1,"workers":-2}},{"id":"B4-Q8","text":"The mandatory BBC licence fee should be replaced with an optional subscription or advertising instead.","context":null,"stance":{"labour":-1,"cons":0,"reform":2,"libdem":-1,"green":-1,"snp":0,"cymru":0,"advance":1,"restore":2,"yourparty":-1,"workers":-1}},{"id":"B4-Q9","text":"Loosening employment and safety regulations for small businesses would create more jobs than it would cost in worker protections.","context":null,"stance":{"labour":-1,"cons":2,"reform":1,"libdem":1,"green":-2,"snp":0,"cymru":0,"advance":1,"restore":1,"yourparty":-1,"workers":-1}},{"id":"B4-Q10","text":"The state pension — including the triple lock — should be protected, even if that means less money for other public spending.","context":null,"stance":{"labour":2,"cons":1,"reform":2,"libdem":2,"green":0,"snp":1,"cymru":1,"advance":-1,"restore":1,"yourparty":1,"workers":2}},{"id":"B4-Q11","text":"The quickest way to get more homes built is to loosen planning rules so developers can build more freely.","context":null,"stance":{"labour":2,"cons":1,"reform":1,"libdem":0,"green":0,"snp":0,"cymru":0,"advance":0,"restore":-1,"yourparty":2,"workers":0}},{"id":"B4-Q12","text":"The quickest way to get more homes built is a large state-led council housing programme.","context":null,"stance":{"labour":2,"cons":-1,"reform":0,"libdem":1,"green":2,"snp":1,"cymru":1,"advance":-1,"restore":-1,"yourparty":2,"workers":2}},{"id":"B4-Q13","text":"Terminally ill adults with full mental capacity should be allowed to end their lives with medical assistance, under strict safeguards.","context":"The Terminally Ill Adults (End of Life) Bill was debated and rejected in Parliament in 2026 on a free vote. Public polling shows majority support for some form of assisted dying; opponents raise concerns about coercion of vulnerable patients and the adequacy of medical safeguards.","stance":{"labour":1,"cons":0,"reform":0,"libdem":2,"green":1,"snp":1,"cymru":1,"advance":0,"restore":-1,"yourparty":1,"workers":-1}},{"id":"B4-Q14","text":"The NHS should be the government's top funding priority, even if that means holding back on tax cuts or other spending plans.","context":"NHS spending is around 40% of day-to-day public service expenditure in England. Some argue the service needs more funding to meet rising demand; others say it needs structural reform before more money would be effective, or that other priorities (defence, education, tax relief) matter more.","stance":{"labour":2,"cons":0,"reform":-1,"libdem":2,"green":2,"snp":2,"cymru":2,"advance":-1,"restore":-1,"yourparty":2,"workers":2}}]},{"index":5,"name":"Fine grain","intro":"Twelve narrow specifics, mostly framed as trade-offs. Small shifts here distinguish similar parties.","questionsShownPerSession":10,"questionsInPool":14,"questions":[{"id":"B5-Q1","text":"Reducing reoffending through rehabilitation matters more than strict punishment.","context":null,"stance":{"labour":2,"cons":-1,"reform":-2,"libdem":2,"green":1,"snp":1,"cymru":1,"advance":0,"restore":-2,"yourparty":2,"workers":1}},{"id":"B5-Q2","text":"All voters should be required to show photo ID at polling stations, even if some legitimate voters are occasionally turned away.","context":null,"stance":{"labour":-1,"cons":2,"reform":2,"libdem":-1,"green":-2,"snp":-1,"cymru":-1,"advance":2,"restore":2,"yourparty":-2,"workers":-1}},{"id":"B5-Q3","text":"Children under 14 should not have access to smartphones with social media.","context":null,"stance":{"labour":1,"cons":1,"reform":0,"libdem":0,"green":1,"snp":0,"cymru":0,"advance":-1,"restore":1,"yourparty":0,"workers":1}},{"id":"B5-Q4","text":"British defence companies should stop selling weapons to other states, even when it means losing trade and jobs.","context":null,"stance":{"labour":0,"cons":-1,"reform":-1,"libdem":1,"green":2,"snp":1,"cymru":1,"advance":-1,"restore":-1,"yourparty":2,"workers":2}},{"id":"B5-Q5","text":"I would accept EU rules on parts of UK business and regulation in exchange for easier trade and travel with the EU.","context":null,"stance":{"labour":2,"cons":-1,"reform":-2,"libdem":2,"green":2,"snp":1,"cymru":1,"advance":-2,"restore":-2,"yourparty":1,"workers":-1}},{"id":"B5-Q6","text":"Strikes that disrupt transport, schools, or hospitals are sometimes justified, even when they cause real inconvenience to the public.","context":null,"stance":{"labour":1,"cons":-1,"reform":-1,"libdem":0,"green":1,"snp":1,"cymru":1,"advance":-2,"restore":-1,"yourparty":2,"workers":2}},{"id":"B5-Q7","text":"The House of Lords should be replaced with an elected second chamber, even if that means losing some expertise currently in the chamber.","context":null,"stance":{"labour":2,"cons":-1,"reform":1,"libdem":2,"green":1,"snp":1,"cymru":1,"advance":0,"restore":-1,"yourparty":1,"workers":1}},{"id":"B5-Q8","text":"Lower corporate taxes would attract enough investment and create enough jobs to outweigh the loss of tax revenue.","context":null,"stance":{"labour":-2,"cons":1,"reform":2,"libdem":0,"green":-2,"snp":0,"cymru":0,"advance":1,"restore":1,"yourparty":-2,"workers":-2}},{"id":"B5-Q9","text":"Climate change and economic inequality deserve more political attention than issues such as immigration, crime, or national sovereignty.","context":null,"stance":{"labour":1,"cons":-1,"reform":-2,"libdem":0,"green":2,"snp":0,"cymru":0,"advance":-1,"restore":-2,"yourparty":2,"workers":0}},{"id":"B5-Q10","text":"Policies that inconvenience and slow-down drivers (low-traffic neighbourhoods, speed limits) in order to cut pollution or improve pedestrian safety cause more harm than benefit.","context":null,"stance":{"labour":-1,"cons":1,"reform":2,"libdem":0,"green":-2,"snp":0,"cymru":0,"advance":1,"restore":1,"yourparty":0,"workers":-1}},{"id":"B5-Q11","text":"New developments should be refused if they don't fit the existing character of the area, even when housing is in short supply.","context":null,"stance":{"labour":-2,"cons":-1,"reform":0,"libdem":-1,"green":0,"snp":0,"cymru":0,"advance":-1,"restore":1,"yourparty":0,"workers":0}},{"id":"B5-Q12","text":"Britain should be noticeably more internationally active in ten years' time — more alliances, more engagement, more commitments abroad.","context":null,"stance":{"labour":2,"cons":0,"reform":-2,"libdem":2,"green":1,"snp":1,"cymru":1,"advance":0,"restore":-1,"yourparty":0,"workers":-2}},{"id":"B5-Q13","text":"Government should actively help first-time buyers onto the housing ladder — through tax incentives, subsidised mortgages, or extending right-to-buy — rather than focusing on social renting.","context":"Homeownership among under-35s is around half its 1990s level. Right-to-buy has sold over two million council homes since 1980; critics say it reduces social housing stock, supporters say it spreads property ownership.","stance":{"labour":-1,"cons":2,"reform":1,"libdem":0,"green":-1,"snp":-1,"cymru":-1,"advance":1,"restore":1,"yourparty":-2,"workers":-1}},{"id":"B5-Q14","text":"The right to protest in public spaces should be protected, even when protests cause disruption or inconvenience to others.","context":"The Public Order Act 2023 introduced new offences relating to protest-related disruption. Supporters say the law protects the public and essential services; critics argue it restricts a basic civil liberty.","stance":{"labour":1,"cons":-2,"reform":-2,"libdem":2,"green":2,"snp":1,"cymru":1,"advance":-2,"restore":-2,"yourparty":2,"workers":2}}]}]};
+const PARTIES = DATA.parties;
+const LIKERT = DATA.likert;
+const FAIRNESS = DATA.fairness;
+const BLOCKS = DATA.blocks;
+
+/* ====================================================================
+   Scoring — transliterated from the original elector.uk JS.
+==================================================================== */
+function score(session, answers, opts){
+  const useCube = !opts || opts.useCube !== false;
+  const dot = Object.fromEntries(PARTIES.map(p => [p.id, 0]));
+  const maxAbs = Object.fromEntries(PARTIES.map(p => [p.id, 0]));
+  session.forEach((b, bi) => b.questions.forEach((q, qi) => {
+    const a = answers[bi] && answers[bi][qi];
+    if (a == null) return;
+    PARTIES.forEach(p => {
+      const st = q.stance[p.id];
+      if (st === undefined) return;
+      dot[p.id] += a * st;
+      maxAbs[p.id] += 2 * Math.abs(st);
+    });
+  }));
+  const bestMaxAbs = Math.max(...Object.values(maxAbs), 1);
+  const aff = {};
+  PARTIES.forEach(p => {
+    const corr = bestMaxAbs < 2 ? 0 : dot[p.id] / bestMaxAbs;
+    aff[p.id] = Math.max(0.02, (corr + 1) / 2);
+  });
+  PARTIES.forEach(p => { if (FAIRNESS[p.id]) aff[p.id] *= FAIRNESS[p.id]; });
+  const amp = {};
+  PARTIES.forEach(p => { amp[p.id] = useCube ? Math.pow(aff[p.id], 3) : aff[p.id]; });
+  const total = Object.values(amp).reduce((a, b) => a + b, 0) || 1;
+  const out = {};
+  PARTIES.forEach(p => { out[p.id] = (amp[p.id] / total) * 100; });
+  return out;
+}
+
+/* ====================================================================
+   Session generation — pick 10 of each block's pool at random.
+==================================================================== */
+function shuffle(arr){
+  const r = arr.slice();
+  for (let i = r.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [r[i], r[j]] = [r[j], r[i]];
+  }
+  return r;
+}
+function generateSession(){
+  return BLOCKS.map(b => ({
+    name: b.name,
+    intro: b.intro,
+    questions: shuffle(b.questions).slice(0, b.questionsShownPerSession),
+  }));
+}
+
+/* ====================================================================
+   App state
+==================================================================== */
+const state = {
+  page: "intro",
+  session: null,
+  answers: null,
+  blockIdx: 0,
+  qIdx: 0,
+  preview: null,
+  showHidden: false,
+  unamplified: false,
+};
+
+function answeredCount(){
+  return state.answers ? state.answers.reduce((s, a) => s + a.length, 0) : 0;
+}
+function totalQuestions(){
+  return state.session ? state.session.reduce((s, b) => s + b.questions.length, 0) : 50;
+}
+function blockProgress(bi){
+  if (!state.answers) return 0;
+  if (bi < state.blockIdx) return 1;
+  if (bi > state.blockIdx) return 0;
+  const blockLen = state.session[bi].questions.length;
+  return state.answers[bi].length / blockLen;
+}
+function activePreviewAnswers(){
+  if (state.preview == null) return state.answers;
+  const a = state.answers.map(arr => arr.slice());
+  if (a[state.blockIdx].length === state.qIdx){
+    a[state.blockIdx].push(state.preview);
+  } else {
+    a[state.blockIdx][state.qIdx] = state.preview;
+  }
+  return a;
+}
+
+/* ====================================================================
+   Tiny element helper
+==================================================================== */
+function el(tag, attrs, ...children){
+  const e = document.createElement(tag);
+  if (attrs){
+    for (const k of Object.keys(attrs)){
+      const v = attrs[k];
+      if (k === "class") e.className = v;
+      else if (k === "html") e.innerHTML = v;
+      else if (k.indexOf("on") === 0) e.addEventListener(k.slice(2), v);
+      else if (v !== undefined && v !== null && v !== false) e.setAttribute(k, v);
+    }
+  }
+  for (const c of children){
+    if (c == null) continue;
+    if (typeof c === "string") e.appendChild(document.createTextNode(c));
+    else e.appendChild(c);
+  }
+  return e;
+}
+
+/* ====================================================================
+   Rendering
+==================================================================== */
+function render(){
+  const root = document.getElementById("app");
+  root.innerHTML = "";
+  const layout = el("div", {class:"layout"});
+  const main = el("div", {class:"main"});
+  const side = el("aside", {class:"side"});
+  layout.appendChild(main);
+  layout.appendChild(side);
+  root.appendChild(layout);
+
+  main.appendChild(renderNav());
+  if (state.page === "intro") main.appendChild(renderIntro());
+  else if (state.page === "block-intro") main.appendChild(renderBlockIntro());
+  else if (state.page === "question") main.appendChild(renderQuestion());
+  else if (state.page === "results") main.appendChild(renderResults());
+  main.appendChild(renderFooter());
+
+  if (state.page !== "intro") side.appendChild(renderScoreboard());
+  else side.appendChild(renderScoreboardPlaceholder());
+}
+
+function renderNav(){
+  const wrap = el("nav", {class:"nav"});
+  const brand = el("a", {class:"brand", href:"#", onclick: e => { e.preventDefault(); resetSession(); }},
+    el("div", {class:"mark", html:"Elector <em>rebuilt</em>"}),
+    el("div", {class:"tag"}, "Live-scoring fork"));
+  wrap.appendChild(brand);
+  const right = el("div", {style:"display:flex;gap:10px"});
+  if (state.page === "question" || state.page === "block-intro"){
+    right.appendChild(el("button", {class:"btn ghost", onclick: () => resetSession()}, "Restart"));
+  }
+  wrap.appendChild(right);
+  return wrap;
+}
+
+function renderProgress(){
+  const wrap = el("div", {class:"progress"});
+  for (let bi = 0; bi < state.session.length; bi++){
+    const isActive = bi === state.blockIdx;
+    const isDone = bi < state.blockIdx;
+    const seg = el("div", {class: "seg" + (isActive ? " active" : "") + (isDone ? " done" : "")});
+    const fill = el("div", {class:"fill"});
+    fill.style.width = (blockProgress(bi) * 100) + "%";
+    seg.appendChild(fill);
+    wrap.appendChild(seg);
+  }
+  return wrap;
+}
+
+function renderIntro(){
+  const wrap = el("div", {class:"intro"});
+  wrap.appendChild(el("h1", {html:"Where do you sit on UK politics, <em>live</em>?"}));
+  wrap.appendChild(el("p", {class:"lede"},
+    "A rebuilt version of the elector.uk quiz with two changes: a live scoreboard that updates as you answer, and a hover-preview that shows where each party would land before you commit. Same questions, same scoring algorithm — just less mystery about how your answers are being read."));
+  const actions = el("div", {style:"display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px"});
+  actions.appendChild(el("button", {class:"btn", onclick: () => startQuiz()}, "Start the quiz \u2192"));
+  wrap.appendChild(actions);
+
+  const grid = el("div", {class:"info-grid"});
+  grid.appendChild(card("50", "questions", "Five blocks of ten, randomly drawn from a pool of 69. Answer with your gut."));
+  grid.appendChild(card("11", "parties", "All parties scored, including four hidden by default. Toggle them on at any time."));
+  grid.appendChild(card("Live", "scoreboard", "Watch your alignment shift after every answer. Hover any option to preview the impact before you commit."));
+  wrap.appendChild(grid);
+  return wrap;
+}
+
+function card(num, label, body){
+  return el("div", {class:"info-card"},
+    el("div", {class:"num"}, num),
+    el("h3", null, label),
+    el("p", null, body));
+}
+
+function renderBlockIntro(){
+  const wrap = el("div");
+  wrap.appendChild(renderProgress());
+  const b = state.session[state.blockIdx];
+  const intro = el("div", {class:"blockintro"},
+    el("div", {class:"meta"}, "Block " + (state.blockIdx + 1) + " of " + state.session.length),
+    el("h2", null, b.name),
+    el("p", null, b.intro));
+  wrap.appendChild(intro);
+  const actions = el("div", {style:"display:flex;gap:10px"});
+  actions.appendChild(el("button", {class:"btn", onclick: () => { state.page = "question"; render(); }}, "Begin block \u2192"));
+  wrap.appendChild(actions);
+  return wrap;
+}
+
+function renderQuestion(){
+  const wrap = el("div");
+  wrap.appendChild(renderProgress());
+
+  const block = state.session[state.blockIdx];
+  const q = block.questions[state.qIdx];
+
+  wrap.appendChild(el("div", {class:"qcount"},
+    el("span", {class:"bname"}, block.name + " \u00B7 "),
+    document.createTextNode("question " + (state.qIdx + 1) + " of " + block.questions.length)));
+
+  wrap.appendChild(el("div", {class:"qstatement"}, q.text));
+  if (q.context){
+    wrap.appendChild(el("div", {class:"qcontext"},
+      el("span", {class:"lbl"}, "Factual context"),
+      document.createTextNode(q.context)));
+  }
+
+  const likert = el("div", {class:"likert"});
+  const sorted = LIKERT.slice().sort((a, b) => a.v - b.v);
+  for (let idx = 0; idx < sorted.length; idx++){
+    const opt = sorted[idx];
+    const isPreview = state.preview === opt.v;
+    const btn = el("button", {
+      class: "lk" + (isPreview ? " previewing" : ""),
+      "data-v": String(opt.v),
+      type: "button",
+      onmouseenter: () => { state.preview = opt.v; updateScoreboard(); markLikert(); },
+      onfocus:      () => { state.preview = opt.v; updateScoreboard(); markLikert(); },
+      onmouseleave: () => { state.preview = null;  updateScoreboard(); markLikert(); },
+      onblur:       () => { state.preview = null;  updateScoreboard(); markLikert(); },
+      ontouchstart: function(e){
+        if (state.preview === opt.v){
+          e.preventDefault();
+          commitAnswer(opt.v);
+        } else {
+          e.preventDefault();
+          state.preview = opt.v;
+          updateScoreboard();
+          markLikert();
+        }
+      },
+      onclick: () => commitAnswer(opt.v),
+    },
+      el("span", {class:"mk"}),
+      el("span", {class:"lbl"}, opt.label));
+    if (isPreview){
+      btn.appendChild(el("span", {class:"hint"}, "click to commit"));
+    }
+    likert.appendChild(btn);
+  }
+  wrap.appendChild(likert);
+
+  const nav = el("div", {class:"qnav"});
+  const canBack = state.blockIdx > 0 || state.qIdx > 0;
+  nav.appendChild(el("button", {
+    class:"btn ghost",
+    disabled: !canBack ? "disabled" : null,
+    onclick: () => goBack(),
+  }, "\u2190 Previous"));
+  nav.appendChild(el("button", {
+    class:"btn ghost",
+    onclick: () => commitAnswer(0),
+  }, "Skip (neutral) \u2192"));
+  wrap.appendChild(nav);
+
+  return wrap;
+}
+
+function markLikert(){
+  const buttons = document.querySelectorAll(".lk");
+  for (let i = 0; i < buttons.length; i++){
+    const b = buttons[i];
+    const v = parseInt(b.getAttribute("data-v"), 10);
+    if (state.preview === v){
+      b.classList.add("previewing");
+      if (!b.querySelector(".hint")){
+        const h = document.createElement("span");
+        h.className = "hint";
+        h.textContent = "click to commit";
+        b.appendChild(h);
+      }
+    } else {
+      b.classList.remove("previewing");
+      const h = b.querySelector(".hint");
+      if (h) h.remove();
+    }
+  }
+}
+
+function commitAnswer(value){
+  if (!state.answers) state.answers = state.session.map(() => []);
+  state.answers[state.blockIdx][state.qIdx] = value;
+  state.preview = null;
+  const block = state.session[state.blockIdx];
+  if (state.qIdx + 1 < block.questions.length){
+    state.qIdx += 1;
+    state.page = "question";
+  } else if (state.blockIdx + 1 < state.session.length){
+    state.blockIdx += 1;
+    state.qIdx = 0;
+    state.page = "block-intro";
+  } else {
+    state.page = "results";
+  }
+  window.scrollTo({top:0, behavior:"smooth"});
+  render();
+}
+
+function goBack(){
+  state.preview = null;
+  if (state.qIdx > 0){
+    state.qIdx -= 1;
+  } else if (state.blockIdx > 0){
+    state.blockIdx -= 1;
+    state.qIdx = state.session[state.blockIdx].questions.length - 1;
+  }
+  if (state.answers && state.answers[state.blockIdx]){
+    state.answers[state.blockIdx] = state.answers[state.blockIdx].slice(0, state.qIdx);
+  }
+  for (let bi = state.blockIdx + 1; bi < state.answers.length; bi++){
+    state.answers[bi] = [];
+  }
+  state.page = "question";
+  render();
+}
+
+function startQuiz(){
+  state.session = generateSession();
+  state.answers = state.session.map(() => []);
+  state.blockIdx = 0;
+  state.qIdx = 0;
+  state.preview = null;
+  state.page = "block-intro";
+  render();
+}
+
+function resetSession(){
+  state.page = "intro";
+  state.session = null;
+  state.answers = null;
+  state.blockIdx = 0;
+  state.qIdx = 0;
+  state.preview = null;
+  render();
+}
+
+/* ====================================================================
+   Scoreboard rendering
+==================================================================== */
+function renderScoreboardPlaceholder(){
+  const wrap = el("div");
+  wrap.appendChild(el("div", {class:"sb-head"},
+    el("div", {class:"sb-title"}, "Live scoreboard")));
+  wrap.appendChild(el("p", {style:"font-size:.86rem;color:var(--ink-soft);margin:0"},
+    "Once you start, every party's match percentage appears here and updates after each answer. Hover or focus a Likert option mid-quiz to preview where the bars would move before you commit."));
+  return wrap;
+}
+
+function renderScoreboard(){
+  const wrap = el("div");
+  const ans = state.answers;
+  const previewAns = activePreviewAnswers();
+  const liveScores = score(state.session, ans);
+  const previewScores = (state.preview != null) ? score(state.session, previewAns) : null;
+
+  const head = el("div", {class:"sb-head"});
+  head.appendChild(el("div", {class:"sb-title"}, "Live scoreboard"));
+  const togBtn = el("button", {
+    class:"sb-toggle" + (state.showHidden ? " on" : ""),
+    type:"button",
+    onclick: () => { state.showHidden = !state.showHidden; render(); }
+  }, state.showHidden ? "Hide hidden" : "Show all 11");
+  head.appendChild(togBtn);
+  wrap.appendChild(head);
+
+  wrap.appendChild(el("div", {class:"sb-meta"},
+    "After " + answeredCount() + " of " + totalQuestions() + " questions"));
+
+  const legend = el("div", {class: "legend" + (previewScores ? " preview-on" : "")});
+  if (previewScores){
+    const lbl = LIKERT.find(l => l.v === state.preview).label;
+    legend.innerHTML = "Showing preview for <strong>" + lbl + "</strong>. Faded bar = current; bright bar = where it would move. Move off the option to clear.";
+  } else {
+    legend.innerHTML = "Hover or focus a Likert option to preview its effect on every party.";
+  }
+  wrap.appendChild(legend);
+
+  const sortedParties = PARTIES.slice().sort((a, b) => liveScores[b.id] - liveScores[a.id]);
+  for (let i = 0; i < sortedParties.length; i++){
+    const p = sortedParties[i];
+    if (p.hiddenByDefault && !state.showHidden) continue;
+    const live = liveScores[p.id];
+    const preview = previewScores ? previewScores[p.id] : null;
+    const delta = preview != null ? preview - live : 0;
+    const row = el("div", {
+      class: "row" + (p.hiddenByDefault ? " hidden-party" : "") + (preview != null ? " previewing" : ""),
+      "data-party": p.id,
+    });
+    const meta = el("div", {class:"meta"});
+    const name = el("div", {class:"pn"});
+    const dot = el("span", {class:"pc"});
+    dot.style.background = p.color;
+    name.appendChild(dot);
+    name.appendChild(el("span", {class:"nm"}, p.name + (p.hiddenByDefault ? " *" : "")));
+    meta.appendChild(name);
+    const valWrap = el("div", {class:"pv"});
+    if (preview != null){
+      valWrap.appendChild(document.createTextNode(preview.toFixed(1) + "%"));
+      const cls = delta > 0.05 ? "up" : (delta < -0.05 ? "down" : "");
+      const sign = delta > 0 ? "+" : "";
+      valWrap.appendChild(el("span", {class:"delta " + cls}, sign + delta.toFixed(1)));
+    } else {
+      valWrap.appendChild(document.createTextNode(live.toFixed(1) + "%"));
+    }
+    meta.appendChild(valWrap);
+    row.appendChild(meta);
+
+    const bar = el("div", {class:"pbar"});
+    const fillWidth = Math.max(0, Math.min(100, live));
+    const ghostWidth = preview != null ? Math.max(0, Math.min(100, preview)) : fillWidth;
+    const fillEl = el("div", {class:"pf"});
+    fillEl.style.width = fillWidth + "%";
+    fillEl.style.background = p.color;
+    bar.appendChild(fillEl);
+    const ghostEl = el("div", {class:"pg"});
+    ghostEl.style.width = ghostWidth + "%";
+    ghostEl.style.background = p.color;
+    bar.appendChild(ghostEl);
+    row.appendChild(bar);
+    wrap.appendChild(row);
+  }
+
+  const note = el("div", {class:"preview-note"});
+  note.innerHTML = "<strong>How to read this:</strong> percentages sum to 100 across all 11 parties (including hidden). The cubic amplifier from the original site is applied — toggle it off on the results screen to see the underlying linear correlation.";
+  wrap.appendChild(note);
+
+  return wrap;
+}
+
+function updateScoreboard(){
+  const side = document.querySelector(".side");
+  if (!side) return;
+  side.innerHTML = "";
+  if (state.page !== "intro") side.appendChild(renderScoreboard());
+  else side.appendChild(renderScoreboardPlaceholder());
+}
+
+/* ====================================================================
+   Results
+==================================================================== */
+function renderResults(){
+  const wrap = el("div");
+  const finalScores = score(state.session, state.answers, {useCube: !state.unamplified});
+  const sorted = PARTIES.slice().sort((a, b) => finalScores[b.id] - finalScores[a.id]);
+  const visible = sorted.filter(p => state.showHidden || !p.hiddenByDefault);
+  const top = visible[0];
+
+  const hero = el("div", {class:"results-hero"});
+  hero.appendChild(el("div", {class:"qcount"}, "Your closest match"));
+  const match = el("div", {class:"rmatch"}, top.name + " — " + finalScores[top.id].toFixed(1) + "%");
+  match.style.background = top.color;
+  hero.appendChild(match);
+  hero.appendChild(el("p", {class:"lede", style:"text-align:center;margin:0 auto"},
+    state.unamplified
+      ? "Unamplified view: linear correlation, no cubic transform. Smaller gaps reflect the actual evidence."
+      : "Cubic-amplified view: the original elector.uk presentation. Useful for ranking but visually inflates small leads."));
+  wrap.appendChild(hero);
+
+  const actions = el("div", {class:"results-actions", style:"justify-content:center"});
+  actions.appendChild(el("button", {
+    class:"btn" + (state.unamplified ? "" : " ghost"),
+    onclick: () => { state.unamplified = !state.unamplified; render(); }
+  }, state.unamplified ? "Show cubic-amplified" : "Show unamplified"));
+  actions.appendChild(el("button", {
+    class:"sb-toggle" + (state.showHidden ? " on" : ""),
+    onclick: () => { state.showHidden = !state.showHidden; render(); }
+  }, state.showHidden ? "Hide hidden parties" : "Show all 11 parties"));
+  actions.appendChild(el("button", {class:"btn", onclick: () => resetSession()}, "Take quiz again"));
+  wrap.appendChild(actions);
+
+  const list = el("div", {style:"margin-top:24px;display:grid;gap:8px"});
+  for (let i = 0; i < sorted.length; i++){
+    const p = sorted[i];
+    if (!state.showHidden && p.hiddenByDefault) continue;
+    const v = finalScores[p.id];
+    const row = el("div", {class:"row"});
+    const meta = el("div", {class:"meta"});
+    const name = el("div", {class:"pn"});
+    const dot = el("span", {class:"pc"});
+    dot.style.background = p.color;
+    name.appendChild(dot);
+    name.appendChild(el("span", {class:"nm", style:"font-size:1rem"}, p.name + (p.hiddenByDefault ? " *" : "")));
+    meta.appendChild(name);
+    meta.appendChild(el("div", {class:"pv", style:"font-size:1rem"}, v.toFixed(1) + "%"));
+    row.appendChild(meta);
+    const bar = el("div", {class:"pbar"});
+    bar.style.height = "14px";
+    const fill = el("div", {class:"pf"});
+    fill.style.width = Math.max(0, Math.min(100, v)) + "%";
+    fill.style.background = p.color;
+    bar.appendChild(fill);
+    row.appendChild(bar);
+    list.appendChild(row);
+  }
+  wrap.appendChild(list);
+
+  return wrap;
+}
+
+function renderFooter(){
+  const f = el("div", {class:"footer"});
+  f.innerHTML = "<p>This is an independent rebuild of <a href=\"https://elector.uk\" target=\"_blank\" rel=\"noopener\">elector.uk</a> with two new behaviours: live per-question scoring and hover-preview of answer impact. The questions, party stance codings, and scoring formula are taken verbatim from the original. No analytics, no tracking, no data leaves your browser.</p><p style=\"margin-top:6px\"><strong>* hidden parties</strong> are off by default in the original; the toggle in the scoreboard reveals Advance UK, Restore Britain, Your Party and Workers Party.</p>";
+  return f;
+}
+
+render();
+
+</script>
+</body>
+</html>
